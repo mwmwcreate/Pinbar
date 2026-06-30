@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'" />
+    <title>Pinbar</title>
+    <link rel="stylesheet" href="manager.css" />
+  </head>
+  <body>
+    <div class="notch" aria-hidden="true"></div>
+    <div class="panel">
+      <header>
+        <div>
+          <p class="eyebrow">PINBAR</p>
+          <h1>サイトを固定</h1>
+        </div>
+        <button id="close" class="icon-button" aria-label="閉じる">×</button>
+      </header>
+
+      <main>
+        <form id="add-form">
+          <label for="url">WebサイトのURL</label>
+          <div class="url-row">
+            <input id="url" name="url" type="text" inputmode="url" placeholder="https://example.com/" autocomplete="url" required autofocus />
+            <button id="submit-site" type="submit" class="primary">固定</button>
+            <button id="cancel-edit" type="button" class="secondary" hidden>取消</button>
+          </div>
+          <label for="name" class="optional">表示名 <span>省略可</span></label>
+          <input id="name" name="name" type="text" placeholder="自動でサイト名を使います" maxlength="60" />
+          <div class="settings-grid">
+            <label>
+              <span class="field-title">初期サイズ</span>
+              <select id="default-size" name="sizePreset"></select>
+            </label>
+            <label>
+              <span class="field-title">User-Agent</span>
+              <select id="user-agent" name="userAgentPreset"></select>
+            </label>
+          </div>
+          <label id="custom-ua-field" class="custom-ua-field" hidden>
+            <span class="field-title">カスタム User-Agent</span>
+            <input id="custom-user-agent" name="customUserAgent" type="text" placeholder="Mozilla/5.0 ..." maxlength="512" />
+          </label>
+          <div class="toggle-row">
+            <label><input id="show-address-bar" type="checkbox" /> アドレスバーを表示</label>
+            <label><input id="pin-default" type="checkbox" /> ピン留め</label>
+          </div>
+          <p id="error" class="error" role="alert"></p>
+        </form>
+
+        <section aria-labelledby="sites-title">
+          <div class="section-heading">
+            <h2 id="sites-title">固定したサイト</h2>
+            <span id="count">0</span>
+          </div>
+          <div id="empty" class="empty">まだサイトはありません。<br />URLを貼り付けると、専用アイコンが増えます。</div>
+          <ul id="sites"></ul>
+          <p class="resize-note">各サイトのウィンドウは、辺や角をドラッグして自由なサイズにも変更できます。</p>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        <span id="app-version">Pinbar</span>
+        <button id="show-about" type="button">このアプリについて</button>
+      </footer>
+    </div>
+
+    <dialog id="about-dialog" aria-labelledby="about-title">
+      <form method="dialog" class="about-card">
+        <p class="eyebrow">PINBAR</p>
+        <h2 id="about-title">Webサイトを、メニューバーのすぐそばに。</h2>
+        <p>Pinbarはサイトごとに独立したアイコンとブラウザ領域を作るmacOSアプリです。</p>
+        <div class="privacy-summary">
+          <strong>プライバシー</strong>
+          <p>Pinbar自身はアクセス履歴や利用状況を収集・送信しません。追加したURL、設定、ログイン情報はこのMac内に保存されます。表示するWebサイトには各サイトのプライバシーポリシーが適用されます。</p>
+        </div>
+        <div class="about-actions">
+          <button id="open-privacy" type="button">詳しい方針</button>
+          <button id="open-support" type="button">サポート</button>
+          <button class="primary" value="close">閉じる</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="manager.js"></script>
+  </body>
+</html>

@@ -1,0 +1,88 @@
+{
+  "name": "pinbar",
+  "productName": "Pinbar",
+  "version": "1.0.0",
+  "description": "Pin any website to the macOS menu bar.",
+  "main": "src/main.js",
+  "author": {
+    "name": "Yuta Muramatsu",
+    "email": "yuta.apple.405@icloud.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/mwmwcreate/Pinbar#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mwmwcreate/Pinbar.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mwmwcreate/Pinbar/issues"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/chrome-preload.js && node --check src/manager.js && node --check src/chrome.js",
+    "verify": "npm run check && npm test",
+    "build": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir --publish never",
+    "dist": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --publish never",
+    "build:mas:unsigned": "node scripts/build-mas-unsigned.js",
+    "dist:mas": "node scripts/build-mas.js"
+  },
+  "devDependencies": {
+    "electron": "42.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.yuta.pinbar",
+    "productName": "Pinbar",
+    "copyright": "Copyright © 2026 Yuta Muramatsu",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "asar": true,
+    "afterPack": "scripts/after-pack.js",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "minimumSystemVersion": "13.0",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "extendInfo": {
+        "LSUIElement": true,
+        "ElectronTeamID": "BZ5UXHD4A4",
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAudioCaptureUsageDescription": "許可したWebサイトで画面共有時の音声を利用するために使用します。",
+        "NSCameraUsageDescription": "固定したWebサイトでカメラを利用するために使用します。",
+        "NSMicrophoneUsageDescription": "固定したWebサイトでマイクを利用するために使用します。",
+        "NSLocationUsageDescription": "許可したWebサイトで位置情報を利用するために使用します。",
+        "NSCameraUseContinuityCameraDeviceType": true
+      }
+    },
+    "mas": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "minimumSystemVersion": "13.0",
+      "type": "distribution",
+      "hardenedRuntime": false,
+      "entitlements": "build/entitlements.mas.plist",
+      "entitlementsInherit": "build/entitlements.mas.inherit.plist",
+      "entitlementsLoginHelper": "build/entitlements.mas.plist",
+      "extendInfo": {
+        "LSUIElement": true,
+        "ElectronTeamID": "BZ5UXHD4A4",
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAudioCaptureUsageDescription": "許可したWebサイトで画面共有時の音声を利用するために使用します。",
+        "NSCameraUsageDescription": "固定したWebサイトでカメラを利用するために使用します。",
+        "NSMicrophoneUsageDescription": "固定したWebサイトでマイクを利用するために使用します。",
+        "NSLocationUsageDescription": "許可したWebサイトで位置情報を利用するために使用します。",
+        "NSCameraUseContinuityCameraDeviceType": true
+      }
+    }
+  }
+}
