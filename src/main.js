@@ -36,12 +36,13 @@ const DEFAULT_BOUNDS = {
   minWidth: 340,
   minHeight: 420,
 };
+// bubble.css の .surface（inset 17px 11px 11px / 角丸 14 - 1）と一致させる。
 const PANEL_INSETS = {
   top: 17,
   right: 11,
   bottom: 11,
   left: 11,
-  radius: 10,
+  radius: 13,
 };
 const TOOLBAR_HEIGHT = 42;
 const ADDRESS_BAR_HEIGHT = 38;
@@ -76,6 +77,10 @@ if (
   process.env.PINBAR_ALLOW_MULTIPLE_INSTANCES !== "1" &&
   !app.requestSingleInstanceLock()
 ) {
+  // 黙って終了すると「起動しない」ように見えるので、理由をターミナルに出す。
+  console.error(
+    "Pinbar はすでに起動しています。先に起動中の Pinbar（メニューバーの + アイコンを右クリック →「Pinbarを終了」）を終了してください。",
+  );
   app.quit();
 }
 

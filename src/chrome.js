@@ -18,6 +18,11 @@ function action(name, payload) {
   return window.pinbarChrome.action(name, payload);
 }
 
+function setLabel(button, label) {
+  button.title = label;
+  button.setAttribute("aria-label", label);
+}
+
 elements.back.addEventListener("click", () => action("back"));
 elements.forward.addEventListener("click", () => action("forward"));
 elements.reload.addEventListener("click", (event) =>
@@ -43,8 +48,15 @@ window.pinbarChrome.onState((state) => {
   elements.addressToggle.classList.toggle("active", state.showAddressBar);
   document.body.classList.toggle("show-address", state.showAddressBar);
   document.body.classList.toggle("detached", state.detached);
-  elements.pin.title = state.pinned ? "ピン留めを解除" : "ピン留め";
-  elements.detach.title = state.detached ? "メニューバーへ戻す" : "ウィンドウを切り離す";
+  setLabel(elements.pin, state.pinned ? "ピン留めを解除" : "ピン留め");
+  setLabel(
+    elements.detach,
+    state.detached ? "メニューバーへ戻す" : "ウィンドウを切り離す",
+  );
+  setLabel(
+    elements.addressToggle,
+    state.showAddressBar ? "アドレスバーを隠す" : "アドレスバーを表示",
+  );
 });
 
 window.pinbarChrome.onFocusAddress(() => {

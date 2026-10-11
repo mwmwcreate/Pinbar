@@ -1,0 +1,98 @@
+/*
+ * 吹き出し（ポップオーバー）の共通シェイプ。
+ *
+ * 角丸の長方形と三角のノッチを「縁の色の層」と「面の色の層」の2層で描く。
+ * 線（border）を使わず、縁色の面を1pxだけ外側に広く塗ることで、
+ * 長方形とノッチの境目に継ぎ目が出ない。
+ *
+ *   .bubble-rim   縁色の角丸長方形（外側）
+ *   .notch::before 縁色のひし形（ノッチの外側）
+ *   .surface      面色の角丸長方形（内側、1px 内寄せ）
+ *   .notch::after  面色のひし形（ノッチの内側、縁と平行に1px 内寄せ）
+ *
+ * 周囲 10px（上はノッチの分 16px）は透明な余白。
+ *
+ * main.js の PANEL_INSETS（top 17 / right 11 / bottom 11 / left 11 / radius 13）
+ * と一致させる。ここを変えるときは main.js も合わせて直す。
+ */
+
+:root {
+  color-scheme: light dark;
+  --notch-x: 50%;
+
+  --bubble-fill: #f3f3f6;
+  --bubble-rim: rgba(0, 0, 0, .2);
+  --bubble-radius: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bubble-fill: #2a2a2e;
+    --bubble-rim: rgba(255, 255, 255, .22);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.bubble {
+  position: absolute;
+  inset: 0;
+}
+
+.bubble-rim {
+  position: absolute;
+  inset: 16px 10px 10px;
+  border-radius: var(--bubble-radius);
+  background: var(--bubble-rim);
+}
+
+.surface {
+  position: absolute;
+  inset: 17px 11px 11px;
+  overflow: hidden;
+  border-radius: calc(var(--bubble-radius) - 1px);
+  background: var(--bubble-fill);
+}
+
+/* ノッチ。中心が --notch-x に来るように置き、角丸の直線区間に収める。 */
+.notch {
+  position: absolute;
+  top: 0;
+  left: clamp(24px, calc(var(--notch-x) - 16px), calc(100% - 56px));
+  width: 32px;
+  height: 17px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.notch::before,
+.notch::after {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  transform: scaleY(.85) rotate(45deg);
+  content: "";
+}
+
+.notch::before { background: var(--bubble-rim); }
+.notch::after {
+  transform: translateY(1.3px) scaleY(.85) rotate(45deg);
+  background: var(--bubble-fill);
+}
+
+/* 切り離し表示ではノッチを消し、上端を詰める。 */
+.detached .notch { display: none; }
+.detached .bubble-rim { top: 10px; }
+.detached .surface { top: 11px; }

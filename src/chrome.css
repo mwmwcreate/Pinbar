@@ -1,143 +1,133 @@
+/* サイト用ポップオーバーのツールバー。シェイプは bubble.css。 */
+
 :root {
-  color-scheme: light dark;
-  --notch-x: 50%;
-  --surface: #ffffff;
-  --toolbar: rgba(248, 248, 250, .96);
-  --border: rgba(0, 0, 0, .22);
-  --separator: rgba(0, 0, 0, .09);
-  --text: #25252a;
-  --muted: #7b7b83;
+  --text: #1d1d20;
+  --muted: #6b6b73;
   --accent: #6252ea;
-  background: transparent;
+  --accent-face: rgba(98, 82, 234, .14);
+  --face: rgba(0, 0, 0, .06);
+  --face-strong: rgba(0, 0, 0, .1);
+  --field: #ffffff;
+  --separator: rgba(0, 0, 0, .08);
   font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  color: var(--text);
 }
 
-* { box-sizing: border-box; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #f2f2f4;
+    --muted: #a7a7af;
+    --accent: #9b8fff;
+    --accent-face: rgba(155, 143, 255, .2);
+    --face: rgba(255, 255, 255, .08);
+    --face-strong: rgba(255, 255, 255, .13);
+    --field: #1e1e22;
+    --separator: rgba(255, 255, 255, .08);
+  }
+}
 
-html,
 body {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  overflow: hidden;
-  background: transparent;
   color: var(--text);
-}
-
-.surface {
-  position: absolute;
-  inset: 16px 10px 10px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 15px;
-  background: var(--surface);
-  box-shadow:
-    0 13px 34px rgba(0, 0, 0, .20),
-    0 3px 10px rgba(0, 0, 0, .12);
-}
-
-.notch {
-  position: absolute;
-  z-index: 1;
-  top: 5px;
-  left: clamp(28px, calc(var(--notch-x) - 9px), calc(100% - 46px));
-  width: 18px;
-  height: 18px;
-  transform: rotate(45deg);
-  border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-  border-radius: 3px 0 0;
-  background: var(--surface);
-  box-shadow: -5px -5px 12px rgba(0, 0, 0, .06);
-}
-
-.toolbar {
-  display: grid;
-  grid-template-columns: auto minmax(48px, 1fr) auto;
-  align-items: center;
-  height: 42px;
-  padding: 0 7px;
-  border-bottom: 1px solid var(--separator);
-  background: var(--toolbar);
-  gap: 5px;
-}
-
-.toolbar-group { display: flex; align-items: center; gap: 2px; }
-.site-title {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 650;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-user-select: none;
 }
 
 button,
 input { font: inherit; }
 
+/* 上部の操作列。高さは main.js の TOOLBAR_HEIGHT（42）と一致させる。 */
+.toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(40px, 1fr) auto;
+  align-items: center;
+  height: 42px;
+  padding: 0 7px;
+  gap: 6px;
+  box-shadow: inset 0 -1px var(--separator);
+}
+
+.show-address .toolbar { box-shadow: none; }
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.site-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tool-button {
   display: grid;
-  width: 27px;
-  height: 27px;
+  width: 28px;
+  height: 28px;
   place-items: center;
   border: 0;
   border-radius: 7px;
+  padding: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 15px;
-  line-height: 1;
   -webkit-app-region: no-drag;
 }
 
-.tool-button:hover { background: rgba(120, 120, 128, .12); color: var(--text); }
-.tool-button:disabled { opacity: .28; }
-.tool-button.active { background: rgba(98, 82, 234, .14); color: var(--accent); }
-.text-button { width: 34px; font-size: 9px; font-weight: 750; letter-spacing: -.02em; }
+.tool-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
+.tool-button:hover { background: var(--face); color: var(--text); }
+.tool-button:active { background: var(--face-strong); }
+.tool-button:disabled { background: transparent; color: var(--muted); opacity: .3; }
+.tool-button.active { background: var(--accent-face); color: var(--accent); }
+.tool-button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* アドレスバー。高さは main.js の ADDRESS_BAR_HEIGHT（38）と一致させる。 */
 .address-row {
   display: none;
   height: 38px;
   align-items: center;
-  padding: 5px 8px;
-  border-bottom: 1px solid var(--separator);
-  background: var(--toolbar);
+  margin: 0;
+  padding: 0 8px 8px;
+  box-shadow: inset 0 -1px var(--separator);
 }
 
 .show-address .address-row { display: flex; }
+
 .address-row input {
   width: 100%;
-  height: 27px;
-  border: 1px solid var(--separator);
+  height: 28px;
+  border: 0;
   border-radius: 7px;
   outline: none;
-  padding: 0 9px;
-  background: var(--surface);
+  padding: 0 10px;
+  background: var(--field);
   color: var(--text);
-  font-size: 11px;
+  font-size: 12px;
   -webkit-app-region: no-drag;
+  -webkit-user-select: text;
 }
-.address-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(98, 82, 234, .12); }
 
-.detached .notch { display: none; }
-.detached .surface { top: 10px; }
+.address-row input::placeholder { color: var(--muted); }
+.address-row input:focus { box-shadow: 0 0 0 2px var(--accent); }
+
+/* 切り離し表示ではツールバー全体をドラッグ領域にする。 */
 .detached .toolbar { -webkit-app-region: drag; }
 
-@media (max-width: 440px) {
+@media (max-width: 400px) {
   .navigation .tool-button:nth-child(2) { display: none; }
-  .actions { gap: 0; }
-  .tool-button { width: 25px; }
-  .text-button { width: 30px; }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface: #242427;
-    --toolbar: rgba(38, 38, 42, .98);
-    --border: rgba(255, 255, 255, .24);
-    --separator: rgba(255, 255, 255, .10);
-    --text: #f2f2f4;
-    --muted: #aaaab2;
-  }
+  .toolbar { padding: 0 5px; gap: 4px; }
+  .toolbar-group { gap: 0; }
+  .tool-button { width: 26px; }
 }
