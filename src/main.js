@@ -29,6 +29,11 @@ const {
   shouldOpenInApp,
 } = require("./helpers");
 const { SiteStore } = require("./store");
+const {
+  buildTrayIcons,
+  normalizeFavicon,
+  pickLargestImage,
+} = require("./tray-icons");
 
 const DEFAULT_BOUNDS = {
   width: 430,
@@ -64,6 +69,7 @@ const PRIVACY_URL =
   "https://github.com/mwmwcreate/Pinbar/blob/main/docs/PRIVACY.md";
 const MAX_USER_AGENT_LENGTH = 512;
 const MAX_FAVICON_BYTES = 2 * 1024 * 1024;
+const MAX_FAVICON_CANDIDATES = 4;
 const KEEP_WINDOWS_OPEN = process.env.PINBAR_KEEP_OPEN === "1";
 
 let managerTray = null;
@@ -103,10 +109,16 @@ function createFallbackSiteIcon() {
   return loadTemplateIcon("siteTemplate.png");
 }
 
-function imageFromStoredFavicon(site) {
-  if (!site.faviconDataUrl) return null;
-  const image = nativeImage.createFromDataURL(site.faviconDataUrl);
-  return image.isEmpty() ? null : image.resize({ width: 18, height: 18 });
+// ポップオーバーを表示しているサイトだけカラー、それ以外はモノクロで出す。
+// favicon が無いサイトは既定のテンプレートアイコン（メニューバー色に追従）。
+function applyTrayIcon(entry) {
+  if (entry.tray.isDestroyed()) return;
+  if (!entry.icons) {
+    entry.tray.setImage(createFallbackSiteIcon());
+    return;
+  }
+  const active = !entry.window.isDestroyed() && entry.window.isVisible();
+  entry.tray.setImage(active ? entry.icons.color : entry.icons.mono);
 }
 
 function positionWindow(tray, window) {
@@ -487,7 +499,8 @@ function setUpIpc() {
       entry.contents.setUserAgent(userAgent);
     }
     if (url !== previous.url) {
-      entry.tray.setImage(createFallbackSiteIcon());
+      entry.icons = null;
+      applyTrayIcon(entry);
       entry.faviconRequested = null;
       void entry.contents.loadURL(url);
     } else if (userAgentChanged) {
@@ -621,27 +634,78 @@ function createManagerTray() {
   });
 }
 
-async function requestSensitivePermission(site, permission, callback) {
-  const labels = {
-    notifications: "通知",
-    media: "カメラまたはマイク",
-    "display-capture": "画面共有",
-    geolocation: "位置情報",
-  };
-  if (!labels[permission]) {
+const PERMISSION_LABELS = {
+  notifications: "通知",
+  media: "カメラまたはマイク",
+  "display-capture": "画面共有",
+  geolocation: "位置情報",
+};
+
+// サイトごとに記憶した権限の判断。値は "granted" か "denied"。
+function normalizePermissions(value) {
+  const permissions = {};
+  if (!value || typeof value !== "object") return permissions;
+  for (const [permission, decision] of Object.entries(value)) {
+    if (PERMISSION_LABELS[permission] && (decision === "granted" || decision === "denied")) {
+      permissions[permission] = decision;
+    }
+  }
+  return permissions;
+}
+
+function setSitePermission(entry, permission, decision) {
+  const permissions = { ...entry.site.permissions };
+  if (decision === "granted" || decision === "denied") permissions[permission] = decision;
+  else delete permissions[permission];
+  entry.site = store.update(entry.site.id, { permissions });
+  broadcastSites();
+}
+
+function isPermissionDenied(entry, permission) {
+  return entry?.site.permissions?.[permission] === "denied";
+}
+
+// 初回だけ確認し、答えはサイトごとに記憶する（毎回聞かない）。
+// ポップオーバーが見えているときはそのウィンドウに付けたシートで出す。
+async function requestSensitivePermission(entry, permission, callback) {
+  if (!PERMISSION_LABELS[permission]) {
     callback(false);
     return;
   }
+  const remembered = entry.site.permissions?.[permission];
+  if (remembered === "granted" || remembered === "denied") {
+    callback(remembered === "granted");
+    return;
+  }
 
-  const result = await dialog.showMessageBox({
-    type: "question",
-    buttons: ["許可しない", "許可"],
-    defaultId: 0,
-    cancelId: 0,
-    title: `${site.name}の権限`,
-    message: `${site.name}が${labels[permission]}へのアクセスを求めています。`,
-  });
-  callback(result.response === 1);
+  entry.permissionPrompts ??= new Map();
+  if (!entry.permissionPrompts.has(permission)) {
+    const options = {
+      type: "question",
+      buttons: ["許可しない", "許可"],
+      defaultId: 0,
+      cancelId: 0,
+      title: `${entry.site.name}の権限`,
+      message: `${entry.site.name}が${PERMISSION_LABELS[permission]}へのアクセスを求めています。`,
+      detail: "この選択は記憶されます。あとからアイコンの右クリックメニューで変更できます。",
+    };
+    const parent =
+      !entry.window.isDestroyed() && entry.window.isVisible() ? entry.window : null;
+    const prompt = (parent
+      ? dialog.showMessageBox(parent, options)
+      : dialog.showMessageBox(options)
+    )
+      .then((result) => {
+        const granted = result.response === 1;
+        if (!entry.window.isDestroyed()) {
+          setSitePermission(entry, permission, granted ? "granted" : "denied");
+        }
+        return granted;
+      })
+      .finally(() => entry.permissionPrompts.delete(permission));
+    entry.permissionPrompts.set(permission, prompt);
+  }
+  callback(await entry.permissionPrompts.get(permission));
 }
 
 function createSiteSession(site) {
@@ -660,7 +724,9 @@ function createSiteSession(site) {
   ]);
   siteSession.setPermissionCheckHandler(
     (_webContents, permission, requestingOrigin) =>
-      allowedPermissions.has(permission) && isWebUrl(requestingOrigin),
+      allowedPermissions.has(permission) &&
+      isWebUrl(requestingOrigin) &&
+      !isPermissionDenied(siteEntries.get(site.id), permission),
   );
   siteSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
     const requestingUrl = details?.requestingUrl || webContents.getURL();
@@ -672,7 +738,12 @@ function createSiteSession(site) {
       callback(true);
       return;
     }
-    void requestSensitivePermission(site, permission, callback);
+    const entry = siteEntries.get(site.id);
+    if (!entry) {
+      callback(false);
+      return;
+    }
+    void requestSensitivePermission(entry, permission, callback);
   });
   return siteSession;
 }
@@ -711,10 +782,12 @@ function configureSiteNavigation(entry) {
   });
 
   contents.on("page-favicon-updated", (_event, favicons) => {
-    const faviconUrl = favicons.find(isWebUrl);
-    if (faviconUrl && faviconUrl !== entry.faviconRequested) {
-      entry.faviconRequested = faviconUrl;
-      void updateSiteFavicon(entry, faviconUrl);
+    // 候補は複数来る（16px・32px など）。大きいものを選びたいので先頭数件をまとめて扱う。
+    const faviconUrls = favicons.filter(isWebUrl).slice(0, MAX_FAVICON_CANDIDATES);
+    const requestKey = faviconUrls.join("\n");
+    if (faviconUrls.length > 0 && requestKey !== entry.faviconRequested) {
+      entry.faviconRequested = requestKey;
+      void updateSiteFavicon(entry, faviconUrls);
     }
   });
 
@@ -738,23 +811,31 @@ function configureSiteNavigation(entry) {
   });
 }
 
-async function updateSiteFavicon(entry, faviconUrl) {
+async function fetchFaviconImage(faviconUrl) {
   try {
     const response = await net.fetch(faviconUrl);
-    if (!response.ok) return;
+    if (!response.ok) return null;
     const declaredSize = Number(response.headers.get("content-length") || 0);
-    if (declaredSize > MAX_FAVICON_BYTES) return;
+    if (declaredSize > MAX_FAVICON_BYTES) return null;
     const arrayBuffer = await response.arrayBuffer();
-    if (arrayBuffer.byteLength > MAX_FAVICON_BYTES) return;
-    const buffer = Buffer.from(arrayBuffer);
-    let image = nativeImage.createFromBuffer(buffer);
-    if (image.isEmpty()) return;
+    if (arrayBuffer.byteLength > MAX_FAVICON_BYTES) return null;
+    const image = nativeImage.createFromBuffer(Buffer.from(arrayBuffer));
+    return image.isEmpty() ? null : image;
+  } catch {
+    return null;
+  }
+}
 
-    image = image.resize({ width: 18, height: 18 });
-    entry.tray.setImage(image);
-    entry.site = store.update(entry.site.id, {
-      faviconDataUrl: image.toDataURL(),
-    });
+async function updateSiteFavicon(entry, faviconUrls) {
+  try {
+    const images = await Promise.all(faviconUrls.map(fetchFaviconImage));
+    const image = pickLargestImage(images);
+    if (!image || entry.window.isDestroyed()) return;
+
+    const faviconDataUrl = normalizeFavicon(image).toDataURL();
+    entry.icons = buildTrayIcons(faviconDataUrl);
+    applyTrayIcon(entry);
+    entry.site = store.update(entry.site.id, { faviconDataUrl });
     broadcastSites();
   } catch {
     // Keep the generated fallback icon when a site blocks favicon downloads.
@@ -805,6 +886,22 @@ function buildSiteMenu(entry) {
       type: "checkbox",
       checked: Boolean(entry.site.showAddressBar),
       click: () => runSiteAction(entry, "address-toggle"),
+    },
+    { type: "separator" },
+    {
+      label: "通知を許可",
+      type: "checkbox",
+      checked: !isPermissionDenied(entry, "notifications"),
+      click: (item) =>
+        setSitePermission(entry, "notifications", item.checked ? "granted" : "denied"),
+    },
+    {
+      label: "記憶した権限の判断を消去",
+      enabled: Object.keys(entry.site.permissions || {}).length > 0,
+      click: () => {
+        entry.site = store.update(entry.site.id, { permissions: {} });
+        broadcastSites();
+      },
     },
     { type: "separator" },
     { label: "再読み込み", click: () => entry.contents.reload() },
@@ -867,6 +964,7 @@ function createSiteEntry(site) {
     showAddressBar: Boolean(site.showAddressBar),
     pinned: Boolean(site.pinned),
     autoName: Boolean(site.autoName),
+    permissions: normalizePermissions(site.permissions),
   };
   const siteSession = createSiteSession(site);
   const bounds = site.bounds || DEFAULT_BOUNDS;
@@ -894,8 +992,8 @@ function createSiteEntry(site) {
   window.setAlwaysOnTop(true, "pop-up-menu");
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
-  const trayImage = imageFromStoredFavicon(site) || createFallbackSiteIcon();
-  const tray = new Tray(trayImage);
+  const icons = buildTrayIcons(site.faviconDataUrl);
+  const tray = new Tray(icons ? icons.mono : createFallbackSiteIcon());
   tray.setToolTip(site.name);
 
   const view = new WebContentsView({
@@ -916,6 +1014,7 @@ function createSiteEntry(site) {
     view,
     contents: view.webContents,
     tray,
+    icons,
     session: siteSession,
     faviconRequested: null,
     boundsTimer: null,
@@ -930,11 +1029,16 @@ function createSiteEntry(site) {
   window.on("focus", () => {
     lastActiveSiteId = site.id;
   });
+  window.on("show", () => applyTrayIcon(entry));
+  window.on("hide", () => applyTrayIcon(entry));
   window.on("blur", () => {
+    // 権限確認のシートが開いている間は、シートがキーになっても閉じない。
+    const promptOpen = entry.permissionPrompts?.size > 0;
     if (
       !KEEP_WINDOWS_OPEN &&
       !entry.site.pinned &&
-      !entry.detached
+      !entry.detached &&
+      !promptOpen
     ) {
       window.hide();
     }
