@@ -23,7 +23,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "check": "node --check src/main.js && node --check src/tray-icons.js && node --check src/preload.js && node --check src/chrome-preload.js && node --check src/manager.js && node --check src/chrome.js",
+    "check": "node --check src/main.js && node --check src/tray-icons.js && node --check src/notification-hook.js && node --check src/preload.js && node --check src/chrome-preload.js && node --check src/manager.js && node --check src/chrome.js",
     "verify": "npm run check && npm test",
     "build": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir --publish never",
     "dist": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --publish never",

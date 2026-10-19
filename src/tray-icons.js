@@ -107,6 +107,60 @@ function toTemplateBitmap(bitmap) {
   return glyph;
 }
 
+// 通知が来たときにアイコンの右上に付ける丸（単位は pt）。
+// テンプレート画像のまま描くので、メニューバーの色に合わせて黒／白になる。
+// 丸のまわりは図柄を少し削って、丸が図柄に埋もれないようにする。
+const BADGE_RADIUS = 3;
+const BADGE_GAP = 1.5;
+
+/**
+ * BGRA（アルファ乗算済み）のビットマップの右上に丸を描く。元のバッファは変えない。
+ * width / height はピクセル数、scale はそのビットマップの倍率（1x なら 1、2x なら 2）。
+ */
+function drawBadge(bitmap, width, height, scale) {
+  const out = Buffer.from(bitmap);
+  const radius = BADGE_RADIUS * scale;
+  const clearRadius = (BADGE_RADIUS + BADGE_GAP) * scale;
+  const centerX = width - radius;
+  const centerY = radius;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const distance = Math.hypot(x + 0.5 - centerX, y + 0.5 - centerY);
+      if (distance > clearRadius + 0.5) continue;
+      const keep = clamp01(distance - clearRadius + 0.5);
+      const dot = clamp01(radius - distance + 0.5);
+      const offset = (y * width + x) * 4;
+      const glyph = keep * (1 - dot);
+      out[offset] = Math.round(out[offset] * glyph);
+      out[offset + 1] = Math.round(out[offset + 1] * glyph);
+      out[offset + 2] = Math.round(out[offset + 2] * glyph);
+      out[offset + 3] = Math.round(255 * dot + out[offset + 3] * glyph);
+    }
+  }
+  return out;
+}
+
+/** テンプレート画像の各倍率に丸を描いた版を作る。 */
+function withBadge(image) {
+  const badged = nativeImage.createEmpty();
+  for (const scaleFactor of image.getScaleFactors()) {
+    const size = image.getSize(scaleFactor);
+    const width = Math.round(size.width * scaleFactor);
+    const height = Math.round(size.height * scaleFactor);
+    const bitmap = image.toBitmap({ scaleFactor });
+    if (bitmap.length !== width * height * 4) continue;
+    badged.addRepresentation({
+      scaleFactor,
+      width,
+      height,
+      buffer: drawBadge(bitmap, width, height, scaleFactor),
+    });
+  }
+  if (badged.isEmpty()) return image;
+  badged.setTemplateImage(true);
+  return badged;
+}
+
 function representationBitmap(image, pixels) {
   const bitmap = image.resize({ width: pixels, height: pixels }).toBitmap();
   return bitmap.length === pixels * pixels * 4 ? bitmap : null;
@@ -128,8 +182,9 @@ function centerInCanvas(bitmap, glyphPixels, canvasPixels) {
 }
 
 /**
- * 保存済み favicon（data URL）から、カラー版とモノクロ（テンプレート）版のトレイアイコンを作る。
- * 表示中はカラー、閉じているときはテンプレート版を使う。
+ * 保存済み favicon（data URL）から、カラー版・モノクロ（テンプレート）版・
+ * 通知の丸付きモノクロ版のトレイアイコンを作る。
+ * 表示中はカラー、閉じているときはモノクロ、通知が来ていれば丸付きを使う。
  * 画像が読めないときは null（呼び出し側で既定のテンプレートアイコンを使う）。
  */
 function buildTrayIcons(faviconDataUrl) {
@@ -169,7 +224,7 @@ function buildTrayIcons(faviconDataUrl) {
   }
   if (color.isEmpty() || mono.isEmpty()) return null;
   mono.setTemplateImage(true);
-  return { color, mono };
+  return { color, mono, badged: withBadge(mono) };
 }
 
 /** 取得した favicon を保存用の大きさに整える。 */
@@ -192,8 +247,10 @@ function pickLargestImage(images) {
 
 module.exports = {
   buildTrayIcons,
+  drawBadge,
   normalizeFavicon,
   pickLargestImage,
   toTemplateBitmap,
+  withBadge,
   TRAY_ICON_SIZE,
 };

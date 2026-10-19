@@ -33,7 +33,12 @@ const {
   buildTrayIcons,
   normalizeFavicon,
   pickLargestImage,
+  withBadge,
 } = require("./tray-icons");
+const {
+  NOTIFICATION_HOOK_SCRIPT,
+  NOTIFICATION_SIGNAL,
+} = require("./notification-hook");
 
 const DEFAULT_BOUNDS = {
   width: 430,
@@ -109,16 +114,35 @@ function createFallbackSiteIcon() {
   return loadTemplateIcon("siteTemplate.png");
 }
 
+let fallbackSiteIcons = null;
+function getFallbackSiteIcons() {
+  if (!fallbackSiteIcons) {
+    const mono = createFallbackSiteIcon();
+    fallbackSiteIcons = { color: mono, mono, badged: withBadge(mono) };
+  }
+  return fallbackSiteIcons;
+}
+
 // ポップオーバーを表示しているサイトだけカラー、それ以外はモノクロで出す。
+// 閉じている間に通知が来たか、タイトルが未読を示していれば右上に丸を付ける。
 // favicon が無いサイトは既定のテンプレートアイコン（メニューバー色に追従）。
 function applyTrayIcon(entry) {
   if (entry.tray.isDestroyed()) return;
-  if (!entry.icons) {
-    entry.tray.setImage(createFallbackSiteIcon());
+  const icons = entry.icons || getFallbackSiteIcons();
+  const visible = !entry.window.isDestroyed() && entry.window.isVisible();
+  if (visible) {
+    entry.tray.setImage(icons.color);
     return;
   }
-  const active = !entry.window.isDestroyed() && entry.window.isVisible();
-  entry.tray.setImage(active ? entry.icons.color : entry.icons.mono);
+  const unread = entry.notified || entry.titleUnread;
+  entry.tray.setImage(unread ? icons.badged : icons.mono);
+}
+
+// 閉じている間に届いた通知だけを数える。開いて見ている間の通知は丸にしない。
+function markSiteNotified(entry) {
+  if (entry.window.isDestroyed() || entry.window.isVisible()) return;
+  entry.notified = true;
+  applyTrayIcon(entry);
 }
 
 function positionWindow(tray, window) {
@@ -781,6 +805,14 @@ function configureSiteNavigation(entry) {
     if (isCustomProtocol(url)) event.preventDefault();
   });
 
+  // 通知 API を包んで、通知が出たら合図を console に出してもらう（notification-hook.js）。
+  contents.on("dom-ready", () => {
+    contents.executeJavaScript(NOTIFICATION_HOOK_SCRIPT).catch(() => {});
+  });
+  contents.on("console-message", (details) => {
+    if (details?.message === NOTIFICATION_SIGNAL) markSiteNotified(entry);
+  });
+
   contents.on("page-favicon-updated", (_event, favicons) => {
     // 候補は複数来る（16px・32px など）。大きいものを選びたいので先頭数件をまとめて扱う。
     const faviconUrls = favicons.filter(isWebUrl).slice(0, MAX_FAVICON_CANDIDATES);
@@ -806,7 +838,11 @@ function configureSiteNavigation(entry) {
       }
     }
     entry.tray.setToolTip(title ? `${entry.site.name} — ${title}` : entry.site.name);
-    entry.tray.setTitle(hasUnreadTitle(title) ? " •" : "");
+    const titleUnread = hasUnreadTitle(title);
+    if (titleUnread !== entry.titleUnread) {
+      entry.titleUnread = titleUnread;
+      applyTrayIcon(entry);
+    }
     sendSiteState(entry);
   });
 }
@@ -993,7 +1029,7 @@ function createSiteEntry(site) {
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   const icons = buildTrayIcons(site.faviconDataUrl);
-  const tray = new Tray(icons ? icons.mono : createFallbackSiteIcon());
+  const tray = new Tray((icons || getFallbackSiteIcons()).mono);
   tray.setToolTip(site.name);
 
   const view = new WebContentsView({
@@ -1015,6 +1051,8 @@ function createSiteEntry(site) {
     contents: view.webContents,
     tray,
     icons,
+    notified: false,
+    titleUnread: false,
     session: siteSession,
     faviconRequested: null,
     boundsTimer: null,
@@ -1029,7 +1067,10 @@ function createSiteEntry(site) {
   window.on("focus", () => {
     lastActiveSiteId = site.id;
   });
-  window.on("show", () => applyTrayIcon(entry));
+  window.on("show", () => {
+    entry.notified = false;
+    applyTrayIcon(entry);
+  });
   window.on("hide", () => applyTrayIcon(entry));
   window.on("blur", () => {
     // 権限確認のシートが開いている間は、シートがキーになっても閉じない。
